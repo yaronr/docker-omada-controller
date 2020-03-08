@@ -1,20 +1,19 @@
 FROM ubuntu:18.04
 MAINTAINER Matt Bentley <mbentley@mbentley.net>
 
-# install runtime dependencies
-RUN apt-get update &&\
-  apt-get install -y libcap-dev net-tools wget &&\
-  rm -rf /var/lib/apt/lists/*
-
 # install omada controller (instructions taken from install.sh); then create a user & group and set the appropriate file system permissions
-RUN cd /tmp &&\
-  echo Downloading Omada controller package.. &&\
+RUN \
+  echo "**** Install Dependencies ****" &&\
+  apt-get update &&\
+  DEBIAN_FRONTEND="noninteractive" apt-get install -y gosu net-tools tzdata wget &&\
+  rm -rf /var/lib/apt/lists/* &&\
+  echo "**** Download Omada Controller ****" &&\
+  cd /tmp &&\
   wget -nv https://static.tp-link.com/2020/202001/20200116/Omada_Controller_v3.2.6_linux_x64.tar.gz &&\
-  echo Extracting tar file.. &&\
-  tar zxf Omada_Controller_v3.2.6_linux_x64.tar.gz &&\
-  echo removing tar file.. &&\
+  echo "**** Extract and Install Omada Controller ****" &&\
+  tar zxvf Omada_Controller_v3.2.6_linux_x64.tar.gz &&\
   rm Omada_Controller_v3.2.6_linux_x64.tar.gz &&\
-  cd Omada_Controller_*/ &&\
+  cd Omada_Controller_* &&\
   mkdir /opt/tplink/EAPController -vp &&\
   cp bin /opt/tplink/EAPController -r &&\
   cp data /opt/tplink/EAPController -r &&\
@@ -27,15 +26,19 @@ RUN cd /tmp &&\
   cp jre /opt/tplink/EAPController/jre -r &&\
   chmod 755 /opt/tplink/EAPController/bin/* &&\
   chmod 755 /opt/tplink/EAPController/jre/bin/* &&\
+  echo "**** Cleanup ****" &&\
   cd /tmp &&\
   rm -rf /tmp/Omada_Controller* &&\
+  echo "**** Setup omada User Account ****" &&\
   groupadd -g 508 omada &&\
   useradd -u 508 -g 508 -d /opt/tplink/EAPController omada &&\
   mkdir /opt/tplink/EAPController/logs /opt/tplink/EAPController/work &&\
   chown -R omada:omada /opt/tplink/EAPController/data /opt/tplink/EAPController/logs /opt/tplink/EAPController/work
 
-USER omada
+COPY entrypoint.sh /entrypoint.sh
+
 WORKDIR /opt/tplink/EAPController
-EXPOSE 8088 8043
+EXPOSE 8088 8043 27001/udp 27002 29810/udp 29811 29812 29813
 VOLUME ["/opt/tplink/EAPController/data","/opt/tplink/EAPController/work","/opt/tplink/EAPController/logs"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/opt/tplink/EAPController/jre/bin/java","-server","-Xms128m","-Xmx1024m","-XX:MaxHeapFreeRatio=60","-XX:MinHeapFreeRatio=30","-XX:+HeapDumpOnOutOfMemoryError","-XX:-UsePerfData","-Deap.home=/opt/tplink/EAPController","-cp","/opt/tplink/EAPController/lib/*:","com.tp_link.eap.start.EapLinuxMain"]
